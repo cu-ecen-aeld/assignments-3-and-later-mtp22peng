@@ -1,4 +1,4 @@
-# Install script for directory: /home/ubuntu/my_assignment/assignment-autotest
+# Install script for directory: /home/ubuntu/assignments-3-and-later-mtp22peng/assignment-autotest
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -39,7 +39,7 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for each subdirectory.
-  include("/home/ubuntu/my_assignment/build/assignment-autotest/Unity/cmake_install.cmake")
+  include("/home/ubuntu/assignments-3-and-later-mtp22peng/build/assignment-autotest/Unity/cmake_install.cmake")
 
 endif()
 

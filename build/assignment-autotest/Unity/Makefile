@@ -48,10 +48,10 @@ RM = /usr/bin/cmake -E remove -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/ubuntu/my_assignment
+CMAKE_SOURCE_DIR = /home/ubuntu/assignments-3-and-later-mtp22peng
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/ubuntu/my_assignment/build
+CMAKE_BINARY_DIR = /home/ubuntu/assignments-3-and-later-mtp22peng/build
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -126,14 +126,14 @@ edit_cache/fast: edit_cache
 
 # The main all target
 all: cmake_check_build_system
-	cd /home/ubuntu/my_assignment/build && $(CMAKE_COMMAND) -E cmake_progress_start /home/ubuntu/my_assignment/build/CMakeFiles /home/ubuntu/my_assignment/build/assignment-autotest/Unity/CMakeFiles/progress.marks
-	cd /home/ubuntu/my_assignment/build && $(MAKE) -f CMakeFiles/Makefile2 assignment-autotest/Unity/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/ubuntu/my_assignment/build/CMakeFiles 0
+	cd /home/ubuntu/assignments-3-and-later-mtp22peng/build && $(CMAKE_COMMAND) -E cmake_progress_start /home/ubuntu/assignments-3-and-later-mtp22peng/build/CMakeFiles /home/ubuntu/assignments-3-and-later-mtp22peng/build/assignment-autotest/Unity/CMakeFiles/progress.marks
+	cd /home/ubuntu/assignments-3-and-later-mtp22peng/build && $(MAKE) -f CMakeFiles/Makefile2 assignment-autotest/Unity/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/ubuntu/assignments-3-and-later-mtp22peng/build/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
 clean:
-	cd /home/ubuntu/my_assignment/build && $(MAKE) -f CMakeFiles/Makefile2 assignment-autotest/Unity/clean
+	cd /home/ubuntu/assignments-3-and-later-mtp22peng/build && $(MAKE) -f CMakeFiles/Makefile2 assignment-autotest/Unity/clean
 .PHONY : clean
 
 # The main clean target
@@ -143,17 +143,17 @@ clean/fast: clean
 
 # Prepare targets for installation.
 preinstall: all
-	cd /home/ubuntu/my_assignment/build && $(MAKE) -f CMakeFiles/Makefile2 assignment-autotest/Unity/preinstall
+	cd /home/ubuntu/assignments-3-and-later-mtp22peng/build && $(MAKE) -f CMakeFiles/Makefile2 assignment-autotest/Unity/preinstall
 .PHONY : preinstall
 
 # Prepare targets for installation.
 preinstall/fast:
-	cd /home/ubuntu/my_assignment/build && $(MAKE) -f CMakeFiles/Makefile2 assignment-autotest/Unity/preinstall
+	cd /home/ubuntu/assignments-3-and-later-mtp22peng/build && $(MAKE) -f CMakeFiles/Makefile2 assignment-autotest/Unity/preinstall
 .PHONY : preinstall/fast
 
 # clear depends
 depend:
-	cd /home/ubuntu/my_assignment/build && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
+	cd /home/ubuntu/assignments-3-and-later-mtp22peng/build && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
 .PHONY : depend
 
 # Help Target
@@ -179,6 +179,6 @@ help:
 # No rule that depends on this can have commands that come from listfiles
 # because they might be regenerated.
 cmake_check_build_system:
-	cd /home/ubuntu/my_assignment/build && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
+	cd /home/ubuntu/assignments-3-and-later-mtp22peng/build && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
 .PHONY : cmake_check_build_system
 

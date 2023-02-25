@@ -1,4 +1,4 @@
-# Install script for directory: /home/ubuntu/my_assignment/assignment-autotest/Unity
+# Install script for directory: /home/ubuntu/assignments-3-and-later-mtp22peng/assignment-autotest/Unity
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -38,14 +38,14 @@ if(NOT DEFINED CMAKE_CROSSCOMPILING)
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/src" TYPE DIRECTORY FILES "/home/ubuntu/my_assignment/assignment-autotest/Unity/src/")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/src" TYPE DIRECTORY FILES "/home/ubuntu/assignments-3-and-later-mtp22peng/assignment-autotest/Unity/src/")
 endif()
 
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
   if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/share/unityConfig/cmake/unityConfig.cmake")
     file(DIFFERENT EXPORT_FILE_CHANGED FILES
          "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/share/unityConfig/cmake/unityConfig.cmake"
-         "/home/ubuntu/my_assignment/build/assignment-autotest/Unity/CMakeFiles/Export/share/unityConfig/cmake/unityConfig.cmake")
+         "/home/ubuntu/assignments-3-and-later-mtp22peng/build/assignment-autotest/Unity/CMakeFiles/Export/share/unityConfig/cmake/unityConfig.cmake")
     if(EXPORT_FILE_CHANGED)
       file(GLOB OLD_CONFIG_FILES "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/share/unityConfig/cmake/unityConfig-*.cmake")
       if(OLD_CONFIG_FILES)
@@ -54,15 +54,15 @@ if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_
       endif()
     endif()
   endif()
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/unityConfig/cmake" TYPE FILE FILES "/home/ubuntu/my_assignment/build/assignment-autotest/Unity/CMakeFiles/Export/share/unityConfig/cmake/unityConfig.cmake")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/unityConfig/cmake" TYPE FILE FILES "/home/ubuntu/assignments-3-and-later-mtp22peng/build/assignment-autotest/Unity/CMakeFiles/Export/share/unityConfig/cmake/unityConfig.cmake")
   if("${CMAKE_INSTALL_CONFIG_NAME}" MATCHES "^()$")
-    file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/unityConfig/cmake" TYPE FILE FILES "/home/ubuntu/my_assignment/build/assignment-autotest/Unity/CMakeFiles/Export/share/unityConfig/cmake/unityConfig-noconfig.cmake")
+    file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/unityConfig/cmake" TYPE FILE FILES "/home/ubuntu/assignments-3-and-later-mtp22peng/build/assignment-autotest/Unity/CMakeFiles/Export/share/unityConfig/cmake/unityConfig-noconfig.cmake")
   endif()
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for each subdirectory.
-  include("/home/ubuntu/my_assignment/build/assignment-autotest/Unity/src/cmake_install.cmake")
+  include("/home/ubuntu/assignments-3-and-later-mtp22peng/build/assignment-autotest/Unity/src/cmake_install.cmake")
 
 endif()
 

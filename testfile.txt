@@ -1,1 +1,1 @@
-home is $HOME
+home is /home/ubuntu
