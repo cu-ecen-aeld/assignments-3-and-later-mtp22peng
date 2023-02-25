@@ -80,10 +80,6 @@ examples/autotest-validate/autotest-validate.h
 
 /home/ubuntu/assignments-3-and-later-mtp22peng/assignment-autotest/test/unity_runner.c
 
-/home/ubuntu/assignments-3-and-later-mtp22peng/examples/systemcalls/systemcalls.c
-systemcalls.h
-/home/ubuntu/assignments-3-and-later-mtp22peng/examples/systemcalls/systemcalls.h
-
 /home/ubuntu/assignments-3-and-later-mtp22peng/examples/systemcalls/systemcalls.h
 stdio.h
 -
