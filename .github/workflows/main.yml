@@ -5,7 +5,7 @@ jobs:
         container: cuaesd/aesd-autotest:unit-test
         runs-on: self-hosted
         steps:
-          - uses: actions/checkout@v2
+          - uses: 'node16'
           - name: Checkout submodules
             run : git submodule update --init --recursive
           - name: Run unit test
