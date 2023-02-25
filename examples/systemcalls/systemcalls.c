@@ -145,7 +145,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
 
 	char* home = getenv("HOME");
 
-	char* path = "/my_assignment/";
+	char* path = "/assignments-3-and-later-mtp22peng/";
 	int len = strlen(home) + strlen(path) + strlen(outputfile)+1;
 	char* fullpath = malloc(len);
 
@@ -160,6 +160,8 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
 	int fd = open(fullpath, O_WRONLY|O_TRUNC|O_CREAT, 0644);
 	free(fullpath);
 	if (fd < 0) { perror("can not open"); abort(); }
+fflush(stdout);
+
 	kidpid = fork();
 
 	if (kidpid == 0) {
