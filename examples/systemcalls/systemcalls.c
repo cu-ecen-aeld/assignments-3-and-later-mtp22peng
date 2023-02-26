@@ -105,6 +105,7 @@ bool do_exec(int count, ...)
 */
 bool do_exec_redirect(const char *outputfile, int count, ...)
 {
+
     va_list args;
     va_start(args, count);
     char * command[count+1];
@@ -130,7 +131,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     int ret = fork();
     switch (ret) {
         case -1:
-            perror("fork");
+            perror("fork error");
             return false;
         case 0: {
             int fd = creat(outputfile, 0644);
@@ -140,7 +141,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
             }
             ret = dup2(fd, STDOUT_FILENO);
             if (ret == -1) {
-                perror("dup2");
+                perror("dup2 error");
                 abort();
             }
             close(fd);
@@ -161,4 +162,64 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     va_end(args);
 
     return true;
+
+	va_list args;
+	va_start(args, count);
+	char * command[count+1];
+	int i;
+	for(i=0; i<count; i++)
+	{
+		command[i] = va_arg(args, char *);
+	}
+	command[count] = NULL;
+
+
+	printf("command[0] is %s\n", command[0]);
+
+	printf("outputfile is %c %c %c\n", outputfile[0], outputfile[1], outputfile[2]);
+
+	// this line is to avoid a compile warning before your implementation is complete
+	// and may be removed
+	//command[count] = command[count];
+
+
+	/*
+	 * TODO
+	 *   Call execv, but first using https://stackoverflow.com/a/13784315/1446624 as a refernce,
+	 *   redirect standard out to a file specified by outputfile.
+	 *   The rest of the behaviour is same as do_exec()
+	 *
+	 */
+   int pid = fork();
+    if (pid == -1) {
+        perror("fork error");
+        return false;
+    } else if (pid == 0) {
+        int ret = execv(command[0], command);
+        if (ret == -1) {
+            perror("execv error");
+            exit(-1);
+        }
+    } else {
+        int status;
+        int ret = waitpid(pid, &status, 0);
+        if (ret == -1) {
+            perror("waitpid error");
+            return false;
+        }
+        if (WIFEXITED(status)) {
+            if (WEXITSTATUS(status) != 0) {
+                return false;
+            }
+        }
+    }
+
+
+
+
+
+	va_end(args);
+
+	return true;
+
 }
