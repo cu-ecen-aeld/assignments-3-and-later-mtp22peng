@@ -66,9 +66,10 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+    fflush(stdout);
     int pid = fork();
     if (pid == -1) {
-        perror("fork");
+        perror("fork error");
         return false;
     } else if (pid == 0) {
         int ret = execv(command[0], command);
@@ -122,6 +123,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
+    fflush(stdout);
     int ret = fork();
     switch (ret) {
         case -1:
