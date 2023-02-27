@@ -25,6 +25,7 @@ bool do_system(const char *cmd)
     if (ret == -1) {
         return false;
     }
+
     return true;
 }
 
@@ -156,5 +157,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     }
 
     va_end(args);
+
+
     return true;
 }
