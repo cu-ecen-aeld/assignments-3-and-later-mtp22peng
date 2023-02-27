@@ -5,6 +5,13 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 
+#include <stdlib.h>
+
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <fcntl.h>
+
 /**
  * @param cmd the command to execute with system()
  * @return true if the command in @param cmd was executed
@@ -66,15 +73,19 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+
     fflush(stdout);
     int pid = fork();
     if (pid == -1) {
         perror("fork error");
+
         return false;
     } else if (pid == 0) {
         int ret = execv(command[0], command);
         if (ret == -1) {
+
             perror("execv error");
+
             exit(-1);
         }
     } else {
@@ -92,6 +103,7 @@ bool do_exec(int count, ...)
     }
 
     va_end(args);
+
     return true;
 }
 
@@ -102,6 +114,7 @@ bool do_exec(int count, ...)
 */
 bool do_exec_redirect(const char *outputfile, int count, ...)
 {
+
     va_list args;
     va_start(args, count);
     char * command[count+1];
@@ -123,7 +136,9 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
+
     fflush(stdout);
+
     int ret = fork();
     switch (ret) {
         case -1:
@@ -132,7 +147,9 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
         case 0: {
             int fd = creat(outputfile, 0644);
             if (fd == -1) {
+
                 perror("creat error");
+
                 abort();
             }
             ret = dup2(fd, STDOUT_FILENO);
@@ -143,7 +160,9 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
             close(fd);
             ret = execv(command[0], command);
             if (ret == -1) {
+
                 perror("execv error");
+
                 abort();
             }
         }
@@ -156,5 +175,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     }
 
     va_end(args);
+
     return true;
+
 }
