@@ -11,7 +11,7 @@ endif
 
 
 
-
+all: writer
 
 
 CFLAGS= -Wall -W -O2 -lrt -g
