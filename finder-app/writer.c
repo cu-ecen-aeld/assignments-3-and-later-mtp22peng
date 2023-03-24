@@ -34,7 +34,7 @@ int main(int argc, char *argv[])
 	int fd1;
 	ssize_t nr; 
 
-	fd1 = open(argv[1], O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+	fd1 = open(argv[1], O_RDWR | O_CREAT | O_TRUNC);
 	if (fd1 == -1)
 	{   
 
