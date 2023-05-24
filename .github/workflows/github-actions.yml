@@ -7,7 +7,7 @@ on:
             - '*'
 jobs:
     full-test:
-        container: cuaesd/aesd-autotest:assignment6
+        container: cuaesd/aesd-autotest:assignment5
         runs-on: self-hosted
         steps:
           - uses: actions/checkout@v2
