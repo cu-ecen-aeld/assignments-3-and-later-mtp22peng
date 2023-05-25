@@ -26,7 +26,7 @@ endif
 #TARGET_EXEC := client
 
 
-ETARGET_EXEC1 = server
+ETARGET_EXEC1 = aesdsocket
 
 BUILD_DIR := ./build
 SRC_DIRS := ./
