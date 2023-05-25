@@ -1,6 +1,6 @@
 CC ?= ${CROSS_COMPILE}gcc
 
-CFLAGS ?= -c -Wall -Werror -pthread
+CFLAGS ?= -Wall -Werror -pthread -o
 
 TARGET ?= aesdsocket
 
