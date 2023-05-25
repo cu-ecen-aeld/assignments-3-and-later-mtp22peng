@@ -41,7 +41,7 @@ int daemon_flag;
 static bool sigint = false;
 static bool sigterm = false;
 static bool sigchld = false;
-static int running = 1;
+//static int running = 1;
 static int thread_count = 0;
 static int thread_remove = 0;
 
@@ -389,8 +389,8 @@ int main(int argc, char **argv)
 	 * failing and returning -1 if any of the socket connection steps fail. 
 	 */
 	int                            opt                      = 0;
-	int                            getaddr_fd               = 0;
-	int                            listen_socket            = 0;
+	//int                            getaddr_fd               = 0;
+	//int                            listen_socket            = 0;
 	bool                           start_daemeon            = false;
 	int                            ret                      = 0;
 	pthread_mutex_t                mutex;
