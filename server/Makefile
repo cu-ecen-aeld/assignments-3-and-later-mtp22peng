@@ -30,7 +30,7 @@ ETARGET_EXEC1 = aesdsocket
 
 BUILD_DIR := ./build
 SRC_DIRS := ./
-
+DST_DIR := /usr/bin
 
 # Find all the C and C++ files we want to compile
 # Note the single quotes around the * expressions. The shell will incorrectly expand these otherwise, but we want to send the * directly to the find command.
@@ -63,10 +63,12 @@ CPPFLAGS := $(INC_FLAGS) -MMD -MP
 CFLAGS :=  -Wall -pthread
 
 
-.PHONY: all
-all:  $(BUILD_DIR)/server 
+.PHONY: all install clean
+
+
+all:  $(BUILD_DIR)/aesdsocket
 # The final build step.
-$(BUILD_DIR)/server:  $(OBJS1)
+$(BUILD_DIR)/aesdsocket:  $(OBJS1)
 	$(CC) $(CFLAGS) $(OBJS1) -o $@ $(LDFLAGS)
 
 
@@ -84,14 +86,14 @@ $(BUILD_DIR)/%.cpp.o: %.cpp
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
 
-
-
+install:  
+	mkdir -p $(DST_DIR)
+	cp  $(BUILD_DIR)/aesdsocket $(DST_DIR)
 #.PHONY: all
 #all:
 #	echo $(OBJS)
 
 
-.PHONY: clean
 clean:
 	rm -r $(BUILD_DIR)
 
