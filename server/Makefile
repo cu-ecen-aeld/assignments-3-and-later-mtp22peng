@@ -1,16 +1,19 @@
-CC ?= ${CROSS_COMPILE}gcc
+ifndef CROSS_COMPILE
+	CC=gcc
+else
+	CC=$(CROSS_COMPILE)gcc
+endif
 
-CFLAGS ?= -Wall -Werror -pthread -o
 
-TARGET ?= aesdsocket
+INCLUDES:= -I ./include
+LIBS:=
+CFLAGS += -g -Wall -Werror -pthread -o
 
-LDFLAGS ?= -lpthread -lrt
+LDFLAGS += -lpthread -lrt
+LIBS=-pthread
 
-.DEFAULT_GOAL := aesdsocket
+all:	aesdsocket
+	$(CC) $(CFLAGS) $^ -o $@ $(INCLUDES) $(LDFLAGS) aesdsocket.c $(LIBS) 
 
-all: aesdsocket
-	$(CC) $(CFLAGS) $^ -o $@ $(INCLUDES) $(LDFLAGS) aesdsocket.c
-
-.PHONY: clean
-clean: 
-	rm -f aesdsocket *.o *.c~ *.h~
+clean:
+	rm -rf *.o aesdsocket
