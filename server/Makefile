@@ -1,19 +1,19 @@
-ifndef CROSS_COMPILE
-	CC=gcc
+ifeq ($(CROSS_COMPILE),aarch64-none-linux-gnu-)
+   CC = $(CROSS_COMPILE)"gcc"
 else
-	CC=$(CROSS_COMPILE)gcc
+   CC = gcc
 endif
 
 
-INCLUDES:= -I ./include
-LIBS:=
-CFLAGS += -g -Wall -Werror -pthread -o
-
-LDFLAGS += -lpthread -lrt
-LIBS=-pthread
 
 all:	aesdsocket
-	$(CC) $(CFLAGS) $^ -o $@ $(INCLUDES) $(LDFLAGS) aesdsocket.c $(LIBS) 
+
+
+CFLAGS= -Wall -W -O2 -lrt -g -Werror -pthread 
+
+ aesdsocket &: aesdsocket.c
+	$(CC) -o aesdsocket aesdsocket.c
 
 clean:
-	rm -rf *.o aesdsocket
+	rm -f aesdsocket.o aesdsocket
+
