@@ -44,6 +44,9 @@ static bool sigchld = false;
 //static int running = 1;
 static int thread_count = 0;
 static int thread_remove = 0;
+int output_file_descriptor = 0;
+int connection_socket_descriptor = 0;
+int server_socket_descriptor = 0;
 
 
 typedef struct 
@@ -63,9 +66,34 @@ struct elm
 
 
 
+void close_socket(int sd) {
+	if (sd && close(sd) < 0) {
+		syslog(LOG_WARNING, "Failed to close incoming socket, error %d", errno);
+	}
+}
 
 
 
+void sync_and_close_output_file(int file_descriptor) {
+	if (file_descriptor && fsync(file_descriptor) < 0) {
+		syslog(LOG_WARNING, "Failed to flush output file, error %d", errno);
+	}
+	if (file_descriptor && close(file_descriptor) < 0) {
+		syslog(LOG_WARNING, "Failed to close output file, error %d", errno);
+	}
+}
+
+
+void terminate(int termination_reason) {
+	sync_and_close_output_file(output_file_descriptor);
+	close_socket(connection_socket_descriptor);
+	close_socket(server_socket_descriptor);
+	if (remove(OUTPUTFILE) < 0) {
+		syslog(LOG_ERR, "Failed to remove the file at %s upon termination, error: %s",OUTPUTFILE, strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+	exit(termination_reason);
+}
 
 
 
@@ -84,49 +112,6 @@ struct elm
 #define BOLDGREEN   "\033[1m\033[32m"      /* Bold Green */
 
 
-
-void make_daemon()
-{
-	pid_t pid = fork();
-
-	/* Fork to create child */
-	if (pid < 0) {
-		exit(EXIT_FAILURE);
-	}
-
-	/* If fork then let parent terminate */
-	if (pid > 0) {
-		exit(EXIT_SUCCESS);
-	}
-
-	/* If parent terminate success then the child 
-	 * owns the session
-	 */
-	if (setsid() < 0) {
-		exit(EXIT_FAILURE);
-	}
-
-	/* Fork off for the second time*/
-	pid = fork();
-
-	/* An error occurred */
-	if (pid < 0)
-		exit(EXIT_FAILURE);
-
-	/* Success: Let the parent terminate */
-	if (pid > 0)
-		exit(EXIT_SUCCESS);
-
-	/* Set new file permissions */
-	umask(0);
-
-	/* Change the working directory to the root directory */
-	/* or another appropriated directory */
-	chdir("/");
-
-	/* Open the log file */
-	openlog ("aesdsocket_daemon", LOG_PID, LOG_DAEMON);
-}
 
 
 
@@ -216,7 +201,6 @@ int write_to_file(char *string)
 
 	printf("String recived: %s -> writing to file %s\n", string, OUTPUTFILE);
 
-	system("mkdir -p /tmp/var");
 
 	fd = fopen(OUTPUTFILE, "a+");
 	if (fd == NULL) {
@@ -227,7 +211,7 @@ int write_to_file(char *string)
 	str_len = strlen(string);
 	bytes_wrote = fwrite(string, sizeof(char), str_len, fd);
 
-	if (bytes_wrote < str_len) {
+	if ((int)bytes_wrote < str_len) {
 		fprintf(stderr, "Failed: to write to file (%s)\n", strerror(errno));
 		return 1;
 	}
@@ -275,7 +259,7 @@ char *read_from_file(void)
 	}
 
 	bytes_read = fread(buffer, sizeof(char), file_size, fd);
-	if (bytes_read < file_size) {
+	if ((long)bytes_read < file_size) {
 		fprintf(stderr, "Failed: to read from file (%s)\n", strerror(errno));
 		exit(0);
 	}
@@ -529,7 +513,77 @@ int main(int argc, char **argv)
 
 
 	if (start_daemeon) {
-		make_daemon();
+
+
+
+
+		/* Here is where we need to check if we should be running as a daemon */
+		pid_t sid = 0;
+		pid_t process_id = fork();
+
+
+		if (process_id < 0) {
+			syslog(LOG_ERR, "Program was requested to run as daemon, but fork() call failed, error: %s", strerror(errno));
+			terminate(EXIT_FAILURE);
+		}
+		else if (process_id > 0) {
+			/* this code branch is for the parent process, where we need to exit */
+			syslog(LOG_NOTICE, "Spun daemon process with PID %d", process_id);
+			exit(EXIT_SUCCESS);
+		}
+		else {
+			/*mask(0);*/
+			/* close stdin, stdout & stderr */
+			if (close(0) < 0) {
+				syslog(LOG_ERR, "Failed to close stdin on daemon process, error: %s", strerror(errno));
+				terminate(EXIT_FAILURE);
+			}
+			if (close(1) < 0) {
+				syslog(LOG_ERR, "Failed to close stdout on daemon process, error: %s", strerror(errno));
+				terminate(EXIT_FAILURE);
+			}
+			if (close(2) < 0) {
+				syslog(LOG_ERR, "Failed to close stderr on daemon process, error: %s", strerror(errno));
+				terminate(EXIT_FAILURE);
+			}
+
+			int null_fd = open("/dev/null", O_APPEND|O_RDWR);
+			if (null_fd < 0) {
+				syslog(LOG_ERR, "Could not open /dev/null to redirect std streams, error: %s", strerror(errno));
+				terminate(EXIT_FAILURE);
+			}
+			if (dup2(null_fd, 0) < 0) {
+				syslog(LOG_ERR, "Failed while trying to redirect stdin, error: %s", strerror(errno));
+				terminate(EXIT_FAILURE);
+			}
+			if (dup2(null_fd, 1) < 0) {
+				syslog(LOG_ERR, "Failed while trying to redirect stdout, error: %s", strerror(errno));
+				terminate(EXIT_FAILURE);
+			}
+			if (dup2(null_fd, 2) < 0) {
+				syslog(LOG_ERR, "Failed while trying to redirect stderr, error: %s", strerror(errno));
+				terminate(EXIT_FAILURE);
+			}
+
+			/* set new session ID, no terminal, daemon will be the only process in this session */
+			sid = setsid();
+			if (sid < 0) {
+				syslog(LOG_ERR, "Failed to set new session ID for the daemon, error: %s", strerror(errno));
+				terminate(EXIT_FAILURE);
+			}
+
+int re;
+
+re =			chdir("/");
+printf("chdir %d",re);
+		}
+
+
+
+
+
+
+
 	}
 
 
