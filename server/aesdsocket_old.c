@@ -22,9 +22,9 @@
 #include <pthread.h>
 #include <sys/queue.h>
 #include <assert.h>
-#include <signal.h>
-#include <time.h>
-#include <fcntl.h>
+
+
+
 
 #define PORT "9000"  // the port users will be connecting to
 
@@ -47,23 +47,20 @@ static int thread_remove = 0;
 int output_file_descriptor = 0;
 int connection_socket_descriptor = 0;
 int server_socket_descriptor = 0;
-timer_t timer_id = 0;
 
 
-
-struct thread_data
+typedef struct 
 {
 	pthread_t           thread_id;
 	pthread_mutex_t     *mutex_lock;
 	int                 incoming_fd;
-	int filed;
 	bool                thread_complete_success;
-};
+} thread_data;
 
 
 struct elm
 {
-	struct thread_data t_data;
+	thread_data t_data;
 	TAILQ_ENTRY(elm) elm_index; 
 };
 
@@ -193,7 +190,6 @@ void *get_in_addr(struct sockaddr *sa)
 
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
-
 
 
 
@@ -351,35 +347,6 @@ void *data_process(void *data)
 
 
 
-static void timer_thread_run_function(union sigval sigval) {
-	struct thread_data* thread_info = (struct thread_data*)sigval.sival_ptr;
-	if (pthread_mutex_lock(thread_info->mutex_lock) != 0) {
-		syslog(LOG_ERR, "Time stamp thread could not lock output file for writing, error: %s", strerror(errno));
-	}
-	else {
-		/* here we access the output file to time stamp */
-		char time_stamp_str[256] = {0};
-		time_t t = time(NULL);
-		struct tm *tmp = localtime(&t);
-		if (tmp == NULL) {
-			syslog(LOG_ERR, "Could not get local time structure, error: %s", strerror(errno));
-		}
-		int ret_val = strftime(time_stamp_str, sizeof(time_stamp_str), "timestamp:%a, %d %b %Y %T %z\n", tmp);
-		if (ret_val == 0) {
-			syslog(LOG_ERR, "Failed to get formatted time stamp string, error: %s", strerror(ret_val));
-		}
-		ret_val = write_to_file(time_stamp_str);
-		if (ret_val) {
-			syslog(LOG_ERR, "Could not write time stamp to output file, error: %s", strerror(ret_val));
-			//thread_info->thread_return_value = EXIT_FAILURE;
-			//pthread_exit(&thread_info->thread_return_value);
-		}
-
-		if (pthread_mutex_unlock(thread_info->mutex_lock) != 0) {
-			syslog(LOG_ERR, "Time stamp thread could not unlock output file... server will likely lock up, error: %s", strerror(errno));
-		}
-	}
-}
 
 
 
@@ -427,7 +394,7 @@ int main(int argc, char **argv)
 	while ((opt = getopt(argc, argv, "d")) != -1) {
 		switch (opt) {
 			case 'd':
-			start_daemeon = true;
+				start_daemeon = true;
 				break;
 			default: /* '?' */
 				start_daemeon = false;
@@ -605,11 +572,17 @@ int main(int argc, char **argv)
 				terminate(EXIT_FAILURE);
 			}
 
-			int re;
+int re;
 
-			re =			chdir("/");
-			printf("chdir %d",re);
+re =			chdir("/");
+printf("chdir %d",re);
 		}
+
+
+
+
+
+
 
 	}
 
@@ -618,42 +591,6 @@ int main(int argc, char **argv)
 	if(ret != 0) {
 		handle_error_en(ret, "Mutex init failed..\n");
 	}
-
-	// open output file for write with create flag on
-	int fd = open(OUTPUTFILE, O_RDWR | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
-	if (fd < 0) {
-		syslog(LOG_ERR, "Could not open/create output file at %s, error %d", OUTPUTFILE, errno);
-		terminate(EXIT_FAILURE);
-	}
-
-
-	/* create thread to start dumping timestamps in output file */
-	struct sigevent sev = {0};
-	struct thread_data timer_thread_info;
-	memset(&timer_thread_info, 0, sizeof(struct thread_data));
-	timer_thread_info.filed = fd;
-	timer_thread_info.mutex_lock = &mutex;
-	sev.sigev_notify = SIGEV_THREAD;
-	sev.sigev_value.sival_ptr = &timer_thread_info;
-	sev.sigev_notify_function = timer_thread_run_function;
-
-	struct itimerspec its = {0};
-	its.it_value.tv_sec = 1;
-	its.it_interval.tv_sec = 10;
-
-	if (timer_create(CLOCK_REALTIME, &sev, &timer_id) !=0 ) {
-		syslog(LOG_ERR, "Could not create timestamp timer object, error: %s", strerror(errno));
-		terminate(EXIT_FAILURE);
-	}
-	// fire timer
-	ret = timer_settime(timer_id, 0, &its, NULL);
-	if (ret != 0) {
-		syslog(LOG_ERR, "Failed to start time stamp time, error: %s", strerror(errno));
-		terminate(EXIT_FAILURE);
-	}
-
-
-
 
 	/* This macro creates the data type for the head of the queue
 	*/
@@ -797,5 +734,4 @@ int main(int argc, char **argv)
 
 
 }
-
 

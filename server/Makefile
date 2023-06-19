@@ -9,8 +9,8 @@ endif
 all:	aesdsocket
 
 
-CFLAGS= -Wall -W -O2 -lrt -g -Werror 
-LDFLAGS += -L./libs -pthread 
+CFLAGS= -Wall -W -O2 -g -Werror 
+LDFLAGS += -L./libs -pthread  -lrt 
 
 # aesdsocket &: aesdsocket.c
 #	$(CC) -o aesdsocket aesdsocket.c
@@ -19,7 +19,7 @@ LDFLAGS += -L./libs -pthread
 
 aesdsocket: aesdsocket.c
 	$(CC) $(INCLUDES) $(CFLAGS) -c aesdsocket.c -o aesdsocket.o
-	$(CC) $(LIBS) $(LDFLAGS) aesdsocket.o -o aesdsocket
+	$(CC) $(LIBS) aesdsocket.o -o aesdsocket $(LDFLAGS) 
 
 
 clean:
