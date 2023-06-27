@@ -3,9 +3,9 @@ CC ?= $(CROSS_COMPILE)gcc
 
 all:	aesdsocket
 
-
-CFLAGS= -Wall -W -O2 -g -Werror 
-LDFLAGS += -L./libs -pthread  -lrt 
+LIBS:= -L./libs 
+CFLAGS ?= -Wall -W -O2 -g -Werror 
+LDFLAGS ?=  -pthread  -lrt 
 
 # aesdsocket &: aesdsocket.c
 #	$(CC) -o aesdsocket aesdsocket.c
