@@ -7,6 +7,13 @@ LIBS:= -L./libs
 CFLAGS ?= -Wall -W -O2 -g -Werror 
 LDFLAGS ?=  -pthread  -lrt 
 
+
+
+
+ifdef USE_AESD_CHAR_DEVICE
+	CFLAGS += -DUSE_AESD_CHAR_DEVICE
+endif
+
 # aesdsocket &: aesdsocket.c
 #	$(CC) -o aesdsocket aesdsocket.c
 

@@ -30,7 +30,21 @@
 
 #define BACKLOG 10   // how many pending connections queue will hold
 #define BUFF_SIZE (1024) 
+
+
+#define USE_AESD_CHAR_DEVICE 1
+
+#ifndef USE_AESD_CHAR_DEVICE
 #define OUTPUTFILE "/var/tmp/aesdsocketdata"
+#else
+#define OUTPUTFILE "/dev/aesdchar"
+#endif
+
+
+
+
+
+
 ssize_t read_size = 0;
 ssize_t write_size = 0;
 FILE *fp;
@@ -91,10 +105,19 @@ void terminate(int termination_reason) {
 	sync_and_close_output_file(output_file_descriptor);
 	close_socket(connection_socket_descriptor);
 	close_socket(server_socket_descriptor);
+
+
+#ifndef USE_AESD_CHAR_DEVICE
+
 	if (remove(OUTPUTFILE) < 0) {
 		syslog(LOG_ERR, "Failed to remove the file at %s upon termination, error: %s",OUTPUTFILE, strerror(errno));
 		exit(EXIT_FAILURE);
 	}
+
+
+#endif
+
+
 	exit(termination_reason);
 }
 
@@ -121,7 +144,19 @@ void terminate(int termination_reason) {
 
 void sigchld_handler(int s)
 {
+	
+	
+	#ifndef USE_AESD_CHAR_DEVICE
+
+	
+	
 	int ret = -1;
+
+
+
+#endif
+
+
 
 	switch (s)
 	{
@@ -136,7 +171,7 @@ void sigchld_handler(int s)
 		case SIGINT:
 			sigint = true;
 
-
+#ifndef USE_AESD_CHAR_DEVICE
 
 			ret = remove(OUTPUTFILE);
 			if (ret != 0) {
@@ -144,7 +179,7 @@ void sigchld_handler(int s)
 			}
 			fprintf(stderr, "Removed file successfully\n");
 
-
+#endif
 
 			exit(1);	
 
@@ -159,6 +194,7 @@ void sigchld_handler(int s)
 
 
 
+#ifndef USE_AESD_CHAR_DEVICE
 
 
 			ret = remove(OUTPUTFILE);
@@ -167,6 +203,7 @@ void sigchld_handler(int s)
 			}
 			fprintf(stderr, "Removed file successfully\n");
 
+#endif
 
 
 			exit(1);	
@@ -348,6 +385,7 @@ void *data_process(void *data)
 }
 
 
+ #ifndef USE_AESD_CHAR_DEVICE
 
 
 
@@ -383,6 +421,7 @@ static void timer_thread_run_function(union sigval sigval) {
 
 
 
+#endif
 
 
 
@@ -627,6 +666,13 @@ int main(int argc, char **argv)
 	}
 
 
+
+
+
+#ifndef USE_AESD_CHAR_DEVICE
+
+
+
 	/* create thread to start dumping timestamps in output file */
 	struct sigevent sev = {0};
 	struct thread_data timer_thread_info;
@@ -653,7 +699,7 @@ int main(int argc, char **argv)
 	}
 
 
-
+#endif
 
 	/* This macro creates the data type for the head of the queue
 	*/
@@ -759,11 +805,25 @@ int main(int argc, char **argv)
 	}
 
 
+
+
+
+	#ifndef USE_AESD_CHAR_DEVICE
+
 	ret = remove(OUTPUTFILE);
 	if (ret != 0) {
 		handle_error_en(ret, "Failed: To remove aesdsocketdata file");
 	}
 	fprintf(stderr, "Removed file successfully\n");
+
+#endif
+
+
+
+
+
+
+
 
 	ret = pthread_mutex_destroy(&mutex);
 	if (ret != 0) {
