@@ -153,34 +153,17 @@ if (dev->working_entry.buffptr) {
        */
       int found_ret = 0;
       int i = 0;
-
-
-// check if encountering end sign
-
-
-
       for (; i < dev->working_entry.size; i++) {
         if (dev->working_entry.buffptr[i] == '\n') {
           found_ret = 1;
           break;
         }
       }
-
-
-
-// do something if end sign is found
-
-
       if (found_ret) {
         const char *buf =
             aesd_circular_buffer_add_entry(&dev->buffer, &dev->working_entry);
         dev->working_entry.size = 0;
         dev->working_entry.buffptr = 0;
-
-
-
-//buffer is full if returned buf is not null, and so prev entry needs to be emptied 
-
 
         if (buf != NULL) {
           kfree(buf);
@@ -258,19 +241,6 @@ int aesd_init_module(void)
      * TODO: initialize the AESD specific portion of the device
      */
 
-
-
-  aesd_circular_buffer_init(&aesd_device.buffer);
-
-  aesd_device.working_entry.size = 0;
-  aesd_device.working_entry.buffptr = NULL;
-  mutex_init(&aesd_device.mut);
-
-
-
-
-
-
     result = aesd_setup_cdev(&aesd_device);
 
     if( result ) {
@@ -289,29 +259,6 @@ void aesd_cleanup_module(void)
     /**
      * TODO: cleanup AESD specific poritions here as necessary
      */
-
-
-  int index = 0;
-  struct aesd_buffer_entry *entry;
-
-
-
-
-
-
-  AESD_CIRCULAR_BUFFER_FOREACH(entry, &aesd_device.buffer, index) {
-    kfree(entry->buffptr);
-  }
-  kfree(aesd_device.working_entry.buffptr);
-  mutex_destroy(&aesd_device.mut);
-  aesd_device.working_entry.buffptr = NULL;
-  aesd_device.working_entry.size = 0;
-  unregister_chrdev_region(devno, 1);
-
-
-
-
-
 
     unregister_chrdev_region(devno, 1);
 }
