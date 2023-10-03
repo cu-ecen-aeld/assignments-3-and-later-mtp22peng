@@ -190,7 +190,11 @@ if (dev->working_entry.buffptr) {
 
 
 
-
+out:
+  mutex_unlock(&dev->mut);
+  /**
+   * TODO: handle write
+   */
 
 
 
