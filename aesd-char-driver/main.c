@@ -32,6 +32,11 @@ MODULE_LICENSE("Dual BSD/GPL");
 
 struct aesd_dev aesd_device;
 
+
+
+static int aesd_setup_cdev(struct aesd_dev *dev);
+
+
 int aesd_open(struct inode *inode, struct file *filp)
 {
     PDEBUG("open");
