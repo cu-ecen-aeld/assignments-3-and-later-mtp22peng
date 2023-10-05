@@ -1,29 +1,25 @@
-
 CC ?= $(CROSS_COMPILE)gcc
 
-all:	aesdsocket
 
-LIBS:= -L./libs 
-CFLAGS ?= -Wall -W -O2 -g -Werror 
-LDFLAGS ?=  -pthread  -lrt 
-
-
-
-
-ifdef USE_AESD_CHAR_DEVICE
-	CFLAGS += -DUSE_AESD_CHAR_DEVICE
+ifeq ($(USE_AESD_CHAR_DEVICE), 1)
+DEFINE_AESD_CHAR_DEVICE = -DUSE_AESD_CHAR_DEVICE=1
+else
+DEFINE_AESD_CHAR_DEVICE =
 endif
+INCLUDES:= -I ./include
+LIBS:= -L./libs 
+CFLAGS ?= -g -Wall -Werror $(DEFINE_AESD_CHAR_DEVICE)
+LDFLAGS ?= -lrt -pthread
+TARGET ?= aesdsocket
 
-# aesdsocket &: aesdsocket.c
-#	$(CC) -o aesdsocket aesdsocket.c
+all:	aesdsocket
+default:aesdsocket
 
-
-
-aesdsocket: aesdsocket.c
+aesdsocket: aesdsocket.c utility_funcs.c ./include/utility.h
 	$(CC) $(INCLUDES) $(CFLAGS) -c aesdsocket.c -o aesdsocket.o
-	$(CC) $(LIBS) aesdsocket.o -o aesdsocket $(LDFLAGS) 
+	$(CC) $(INCLUDES) $(CFLAGS) -c utility_funcs.c -o utility_funcs.o
+	$(CC) $(LIBS) utility_funcs.o aesdsocket.o -o ${TARGET} $(LDFLAGS) 
 
-
+.PHONY: clean
 clean:
-	rm -f aesdsocket.o aesdsocket
-
+	rm -rf *.o aesdsocket
