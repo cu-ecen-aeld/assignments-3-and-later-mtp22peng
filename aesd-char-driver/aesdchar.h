@@ -1,4 +1,8 @@
- *      Author: Dan Walkes
+/*
+ * aesdchar.h
+ *
+ *  Created on: Oct 23, 2019
+*      Author: Dan Walkes
  */
 #ifndef AESD_CHAR_DRIVER_AESDCHAR_H_
 #define AESD_CHAR_DRIVER_AESDCHAR_H_
