@@ -1,446 +1,610 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <unistd.h>
-#include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
+#include <unistd.h>
 #include <errno.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 #include <syslog.h>
-#include <signal.h>
-#include <pthread.h>
-#include <signal.h>
 #include <time.h>
+#include <signal.h>
+#include <netdb.h>
 #include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <sys/time.h>
+#include <sys/resource.h>
+#include <pthread.h>
 #include "queue.h"
-#include "utility.h"
+#include "../aesd-char-driver/aesd_ioctl.h"
 
-#define USE_AESD_CHAR_DEVICE 1
+#define USE_AESD_CHAR_DEVICE (1)
 
-/* unistd.h defines sleep, usleep & nanosleep */
-/* clock_nanosleep */
-/* always use CLOCK_MONOTONIC for clock type */
-/* set initial reference by calling clock_gettime */
-/* start sleep */
-/* get clock_gettime again to confirm sleep duration */
-/* but sleeps should not be used, instead use timers */
-/* in unistd.h, alarm via signals, getitimer/setitimer */
-/* POSIX timers -> <signal.h> & <time.h>, timer_create/timersettime/timer_delete */
-/* Chapter 11 of Linux System Programming. Min 8:40 of week's 4 Sleeping and Timers video */
-struct list_node {
-    struct thread_information* ptr;
-    SLIST_ENTRY(list_node) nodes;
-};
+#define PORT "9000"
+#define MAXBUFLEN (256 * 1024U)
+#define BACKLOG 10 // Number of pending connections queue will hold.
 
-/* global variables */
-int server_socket_descriptor = 0;
-int output_file_descriptor = 0;
-int connection_socket_descriptor = 0;
-#ifdef USE_AESD_CHAR_DEVICE
-char* output_file_path = "/dev/aesdchar";
+// Path and pointer to the log file.
+#if USE_AESD_CHAR_DEVICE
+#define LOG_PATH "/dev/aesdchar"
 #else
-char* output_file_path = "/var/tmp/aesdsocketdata";
+#define LOG_PATH "/var/tmp/aesdsocketdata"
 #endif
-bool mutex_initialized = false;
-pthread_mutex_t mutex;
-timer_t timer_id = 0;
-SLIST_HEAD(slist_head, list_node);
 
-struct slist_head head_node;
+// Global boolean for SIGINT and SIGTERM
+bool caughtsig = false;
 
-/* helper methods */
+// Global mutex to be used for writing to the log file
+pthread_mutex_t log_lock;
 
-void close_socket(int sd) {
-    if (sd && close(sd) < 0) {
-        syslog(LOG_WARNING, "Failed to close incoming socket, error %d", errno);
-    }
-}
+// Structs for the single linked lists
+typedef struct thread_args_s thread_args_t;
+typedef struct slist_data_s slist_data_t;
 
-void terminate(int termination_reason) {
-    if (timer_id) {
-        if (timer_delete(timer_id) != 0) {
-            syslog(LOG_ERR, "Error while canceling time stamp timer, error: %s", strerror(errno));
-        }
-    }
-
-    /* iterate through the list of threads and request their termination */
-    struct list_node* current_node = NULL;
-    while (!SLIST_EMPTY(&head_node)) {
-        current_node = SLIST_FIRST(&head_node);
-        /* send kill signal to thread */
-        int ret_val = pthread_cancel(current_node->ptr->thread_id);
-        if (ret_val) {
-            syslog(LOG_WARNING, "Could not cancel thread ID %ld, error: %s", current_node->ptr->thread_id, strerror(ret_val));
-        }
-        void* res;
-        ret_val = pthread_join(current_node->ptr->thread_id, &res);
-        if (ret_val) {
-            syslog(LOG_ERR, "join error for thread ID %ld, error: %s", current_node->ptr->thread_id, strerror(ret_val));
-        }
-        if (current_node->ptr->socketd) {
-            close(current_node->ptr->socketd);
-            syslog(LOG_NOTICE, "Closed connection from %s", current_node->ptr->ip_address);
-            if (current_node->ptr->ip_address) {
-                free(current_node->ptr->ip_address);
-            }
-        }
-        if (current_node->ptr->file_name) {
-            free(current_node->ptr->file_name);
-        }
-
-        SLIST_REMOVE_HEAD(&head_node, nodes);
-        free(current_node->ptr);
-        free(current_node);
-        current_node = NULL;
-    }
-
-    if (mutex_initialized) {
-        int ret_val = pthread_mutex_destroy(&mutex);
-        if (ret_val) {
-            syslog(LOG_WARNING, "Failed to destroy mutex instance during cleanup, error: %s", strerror(ret_val));
-        }
-    }
-    close_socket(server_socket_descriptor);
-#ifndef USE_AESD_CHAR_DEVICE
-    if (remove(output_file_path) < 0) {
-        syslog(LOG_ERR, "Failed to remove the file at %s upon termination, error: %s", output_file_path, strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-#endif
-    exit(termination_reason);
-}
-
-/* Signal handler definitions */
-static void termination_handler(int signal_number) {
-    if (signal_number == SIGINT) {
-        syslog(LOG_NOTICE, "Caught signal, exiting");
-        terminate(EXIT_SUCCESS);
-    }
-    else if (signal_number == SIGTERM) {
-        syslog(LOG_NOTICE, "Caught signal, exiting");
-        terminate(EXIT_SUCCESS);
-    }
-}
-
-void setup_signal_handlers(void) {
-    struct sigaction sigact;
-    memset(&sigact, 0, sizeof(sigact));
-    sigact.sa_handler = termination_handler;
-    if (sigaction(SIGTERM, &sigact, NULL) != 0) {    
-        syslog(LOG_ERR, "Failure when trying to register a handler for the SIGTERM signal");
-        exit(EXIT_FAILURE);
-    }
-    if (sigaction(SIGINT, &sigact, NULL) != 0) {
-        syslog(LOG_ERR, "Failure when trying to register a handler for the SIGINT signal");
-        exit(EXIT_FAILURE);
-    }
-}
-
-void print_usage(void) {
-    printf("Wrong options passed\n");
-    printf("Usage:\n");
-    printf("aesdsocket [-OPTION] [[value]]\n");
-    printf("\t-d\t\t\tRun as daemon.\n");
-    printf("\t-p <port number>\tSpecify port number.\n");
-    printf("\t-f <file>\t\tOutput file.\n");
-}
-
-enum program_parameters {
-    NONE,
-    RUN_AS_DAEMON,
-    PORT_NUMBER,
-    OUTPUT_FILE
+struct thread_args_s
+{
+	int complete;
+	int rv;
+	int listenfd;
+	struct sockaddr laddr;
 };
 
-#ifndef USE_AESD_CHAR_DEVICE
+struct slist_data_s
+{
+	pthread_t thread;
+	thread_args_t threadargs;
+	SLIST_ENTRY(slist_data_s)
+	entries;
+};
 
-static void timer_thread_run_function(union sigval sigval) {
-    struct thread_information* thread_info = (struct thread_information*)sigval.sival_ptr;
-    if (pthread_mutex_lock(thread_info->mutex_ptr) != 0) {
-    	syslog(LOG_ERR, "Time stamp thread could not lock output file for writing, error: %s", strerror(errno));
-    }
-    else {
-    	/* here we access the output file to time stamp */
-        char time_stamp_str[256] = {0};
-    	time_t t = time(NULL);
-    	struct tm *tmp = localtime(&t);
-    	if (tmp == NULL) {
-    	    syslog(LOG_ERR, "Could not get local time structure, error: %s", strerror(errno));
-    	}
-        int ret_val = strftime(time_stamp_str, sizeof(time_stamp_str), "timestamp:%a, %d %b %Y %T %z\n", tmp);
-        if (ret_val == 0) {
-            syslog(LOG_ERR, "Failed to get formatted time stamp string, error: %s", strerror(ret_val));
-        }
-        ret_val = dump_buffer_to_file(time_stamp_str, ret_val, thread_info->filed);
-        if (ret_val) {
-            syslog(LOG_ERR, "Could not write time stamp to output file, error: %s", strerror(ret_val));
-            //thread_info->thread_return_value = EXIT_FAILURE;
-            //pthread_exit(&thread_info->thread_return_value);
-        }
 
-    	if (pthread_mutex_unlock(thread_info->mutex_ptr) != 0) {
-    	    syslog(LOG_ERR, "Time stamp thread could not unlock output file... server will likely lock up, error: %s", strerror(errno));
-    	}
-    }
+// Function to handle SIGTERM and SIGINT
+static void signal_handler(int signum)
+{
+	caughtsig = true;
 }
 
+
+// This function will be used for the timestamp creation thread
+#if !USE_AESD_CHAR_DEVICE
+static void time_thread(union sigval sv)
+{
+	char outstr[256];
+	time_t t;
+	struct tm *time_info;
+	FILE *fp;
+	t = time(NULL);
+
+	// Get the local time
+	if ((time_info = localtime(&t)) == NULL)
+	{
+		printf("ERROR: Get Local Time\n");
+		syslog(LOG_ERR, "ERROR: Get Local Time");
+	}
+
+	// Format the timestamp using RFC 2822 compliant strftime
+	if (strftime(outstr, sizeof(outstr), "%a, %d %b %Y %T %z", time_info) == 0)
+	{
+		printf("ERROR: Format TimeStamp to RFC 2822\n");
+		syslog(LOG_ERR, "ERROR: Format TimeStamp to RFC 2822");
+	}
+
+	// Get the mutex to lock the LOG FILE for writing.
+	if (pthread_mutex_lock(&log_lock) != 0)
+	{
+		printf("ERROR: Mutex Lock to Write Timestamp\n");
+		syslog(LOG_ERR, "ERROR: Mutex Lock to Write Timestamp");
+	}
+
+	// Write timestampt to LOG FILE using global pointer.
+	if ((fp = fopen(LOG_PATH, "a")) == NULL)
+	{
+		perror("ERROR: Unable to Open Log Path");
+	}
+	else
+	{
+		fprintf(fp, "timestamp:%s\n", outstr);
+		if (fclose(fp) == EOF)
+		{
+			perror("ERROR: Unable to Close Log File");
+		}
+	}
+	// Release the mutex lock.
+	if (pthread_mutex_unlock(&log_lock) != 0)
+	{
+		printf("ERROR: Mutex Unlock After Timestamp Write to Log File\n");
+		syslog(LOG_ERR, "ERROR: Mutex Unlock After Timestamp Write to Log File");
+	}
+}
 #endif
 
-int main(int argc, char* argv[]) {
 
-    bool running_as_daemon = false;
-    int opt_val = 1;
-    int server_port = 9000;
-    SLIST_INIT(&head_node);
+int parse_cmd(char *buf, size_t buflen, struct aesd_seekto *seekto)
+{
+	char *cmd, *arg1, *arg2;
 
-    openlog("aesdsocket", LOG_CONS | LOG_PERROR | LOG_PID, running_as_daemon ? LOG_DAEMON : LOG_USER);
-    
-    if (argc > 1) {
-        int arg_idx = 1;
-        bool reading_value = false;
-        enum program_parameters last_parameter = NONE;
-        while (arg_idx < argc) {
-            if (!reading_value) {
-                if (strcmp(argv[arg_idx], "-d") == 0) {
-                    reading_value = false;
-                    running_as_daemon = true;
-                    last_parameter = RUN_AS_DAEMON;
-                    arg_idx++;
-                }
-                else if (strcmp(argv[arg_idx], "-p") == 0) {
-                    reading_value = true;
-                    last_parameter = PORT_NUMBER;
-                    arg_idx++;
-                }
-                else if (strcmp(argv[arg_idx], "-f") == 0) {
-                    reading_value = true;
-                    last_parameter = OUTPUT_FILE;
-                    arg_idx++;
-                }
-                else {
-                    print_usage();
-                    exit(EXIT_FAILURE);
-                }
-            }
-            else {
-                switch (last_parameter) {
-                    case PORT_NUMBER:
-                        server_port = atoi(argv[arg_idx]);
-                        reading_value = false;
-                        last_parameter = NONE;
-                        arg_idx++;
-                        break;
-                    case OUTPUT_FILE:
-                        output_file_path = argv[arg_idx];
-                        reading_value = false;
-                        last_parameter = NONE;
-                        arg_idx++;
-                        break;
-                    default:
-                        print_usage();
-                        exit(EXIT_FAILURE);
-                        break;
-                }
-            }
-        }
-        for (int arg_idx = 1; arg_idx < argc; arg_idx++) {
-            printf("Found argument %s at position %d\n", argv[arg_idx], arg_idx);
-        }
-    }
-    
-    setup_signal_handlers();
-    
-    syslog(LOG_NOTICE, "%s as a daemon, on port number %d, dumping to file %s", running_as_daemon ? "Running" : "Not running" , server_port, output_file_path);
+	cmd = malloc(buflen);
+	if (!cmd)
+	{
+		return -1;
+	}
+	memcpy(cmd, buf, buflen);
 
-    int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_fd < 0) {
-        syslog(LOG_ERR, "Failed to open server socket: %d", errno);
-        terminate(EXIT_FAILURE);
-    }
-    
-    if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt_val, sizeof(opt_val)) < 0) {
-        syslog(LOG_ERR, "Failed to set socket options: %d", errno);
-        terminate(EXIT_FAILURE);	
-    }
-    
-    struct sockaddr_in address;
-    memset(&address, 0, sizeof(address));
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(server_port);
-    unsigned int addr_length = sizeof(address);
-        
-    if (bind(socket_fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
-        syslog(LOG_ERR, "Socket bind failed: %d", errno);
-        terminate(EXIT_FAILURE);
-    }
-    
-    /* Here is where we need to check if we should be running as a daemon */
-    if (running_as_daemon) {
-        pid_t sid = 0;
-        pid_t process_id = fork();
-        
-        
-        if (process_id < 0) {
-            syslog(LOG_ERR, "Program was requested to run as daemon, but fork() call failed, error: %s", strerror(errno));
-            terminate(EXIT_FAILURE);
-        }
-        else if (process_id > 0) {
-            /* this code branch is for the parent process, where we need to exit */
-            syslog(LOG_NOTICE, "Spun daemon process with PID %d", process_id);
-            exit(EXIT_SUCCESS);
-        }
-        else {
-            /*mask(0);*/
-            /* close stdin, stdout & stderr */
-            if (close(0) < 0) {
-                syslog(LOG_ERR, "Failed to close stdin on daemon process, error: %s", strerror(errno));
-                terminate(EXIT_FAILURE);
-            }
-            if (close(1) < 0) {
-                syslog(LOG_ERR, "Failed to close stdout on daemon process, error: %s", strerror(errno));
-                terminate(EXIT_FAILURE);
-            }
-            if (close(2) < 0) {
-                syslog(LOG_ERR, "Failed to close stderr on daemon process, error: %s", strerror(errno));
-                terminate(EXIT_FAILURE);
-            }
-            
-            int null_fd = open("/dev/null", O_APPEND|O_RDWR);
-            if (null_fd < 0) {
-                syslog(LOG_ERR, "Could not open /dev/null to redirect std streams, error: %s", strerror(errno));
-                terminate(EXIT_FAILURE);
-            }
-            if (dup2(null_fd, 0) < 0) {
-                syslog(LOG_ERR, "Failed while trying to redirect stdin, error: %s", strerror(errno));
-                terminate(EXIT_FAILURE);
-            }
-            if (dup2(null_fd, 1) < 0) {
-                syslog(LOG_ERR, "Failed while trying to redirect stdout, error: %s", strerror(errno));
-                terminate(EXIT_FAILURE);
-            }
-            if (dup2(null_fd, 2) < 0) {
-                syslog(LOG_ERR, "Failed while trying to redirect stderr, error: %s", strerror(errno));
-                terminate(EXIT_FAILURE);
-            }
-            
-            /* set new session ID, no terminal, daemon will be the only process in this session */
-            sid = setsid();
-            if (sid < 0) {
-                syslog(LOG_ERR, "Failed to set new session ID for the daemon, error: %s", strerror(errno));
-                terminate(EXIT_FAILURE);
-            }
-            int ret_val = chdir("/");
-            if (ret_val < 0) {
-                syslog(LOG_ERR, "Failed to change directory to / when launching as daemon, error: %s", strerror(errno));
-                terminate(EXIT_FAILURE);
-            }
-        }
-    }
-    
-    if (listen(socket_fd, 1) < 0) {
-        syslog(LOG_ERR, "Socket listen failed: %d", errno);
-        terminate(EXIT_FAILURE);
-    }
-            
-    int conn_socket = 0;
-    int ret_val = pthread_mutex_init(&mutex, NULL);
-    if (ret_val) {
-        syslog(LOG_ERR, "Error while creating the mutex instance, error: %s", strerror(ret_val));
-        terminate(EXIT_FAILURE);
-    }
-    mutex_initialized = true;
+	cmd[strcspn(cmd, "\n")] = '\0';
+	cmd = strtok(cmd, ":");
+	if (!cmd)
+	{
+		free(cmd);
+		return -1;
+	}
 
-#ifndef USE_AESD_CHAR_DEVICE
+	// Compare the strings. A false match will return a non-zero value
+	if (strcmp(cmd, "AESDCHAR_IOCSEEKTO"))
+	{
+		free(cmd);
+		return -1;
+	}
 
-    /* create thread to start dumping timestamps in output file */
-    struct sigevent sev = {0};
-    struct thread_information timer_thread_info;
-    memset(&timer_thread_info, 0, sizeof(struct thread_information));
-    timer_thread_info.filed = fd;
-    timer_thread_info.mutex_ptr = &mutex;
-    sev.sigev_notify = SIGEV_THREAD;
-    sev.sigev_value.sival_ptr = &timer_thread_info;
-    sev.sigev_notify_function = timer_thread_run_function;
+	arg1 = strtok(NULL, ",");
+	arg2 = strtok(NULL, "");
+	if (arg1 == NULL || arg2 == NULL)
+	{
+		free(cmd);
+		return -1;
+	}
 
-    struct itimerspec its = {0};
-    its.it_value.tv_sec = 1;
-    its.it_interval.tv_sec = 10;
+	seekto->write_cmd = strtoul(arg1, NULL, 10);
+	if (seekto->write_cmd == 0 && errno == EINVAL)
+	{
+		free(cmd);
+		return -1;
+	}
+	seekto->write_cmd_offset = strtoul(arg2, NULL, 10);
+	if (seekto->write_cmd_offset == 0 && errno == EINVAL)
+	{
+		free(cmd);
+		return -1;
+	}
 
-    if (timer_create(CLOCK_REALTIME, &sev, &timer_id) !=0 ) {
-        syslog(LOG_ERR, "Could not create timestamp timer object, error: %s", strerror(errno));
-        terminate(EXIT_FAILURE);
-    }
-    // fire timer
-    ret_val = timer_settime(timer_id, 0, &its, NULL);
-    if (ret_val != 0) {
-        syslog(LOG_ERR, "Failed to start time stamp time, error: %s", strerror(errno));
-        terminate(EXIT_FAILURE);
-    }
+	free(cmd);
+	return 0;
+}
+
+// This function will be used for the data receive and send thread
+static void *serve_thread(void *arg)
+{
+	char ipstr[INET_ADDRSTRLEN];
+	char *recvbuf, *sendbuf;
+	int rv;
+	size_t sendbuflen;
+	thread_args_t *targs = arg;
+	FILE *fp;
+	int fd;
+	struct aesd_seekto seekto;
+
+	targs->rv = 0;
+	// Convert binary format address of client to characters and store in the address buffer
+	if (inet_ntop(targs->laddr.sa_family, targs->laddr.sa_data, ipstr, sizeof(ipstr)) == NULL)
+	{
+		printf("ERROR: INET NTOP\n");
+        syslog(LOG_ERR, "ERROR: INET NTOP");
+		targs->rv = -1;
+		return &targs->rv;
+	}
+	syslog(LOG_INFO, "Accepted connection from %s\n", ipstr);
+
+	while (1)
+	{
+		// Allocate memory for the send and receive buffers
+		if ((recvbuf = malloc(MAXBUFLEN)) == NULL)
+		{
+			printf("ERROR: Malloc for Receive Buffer\n");
+	        syslog(LOG_ERR, "ERROR: Malloc for Receive Buffer");
+			targs->rv = -1;
+			break;
+		}
+		if ((sendbuf = malloc(MAXBUFLEN)) == NULL)
+		{
+			printf("ERROR: Malloc for Send Buffer\n");
+	        syslog(LOG_ERR, "ERROR: Malloc for Send Buffer");
+			targs->rv = -1;
+			break;
+		}
+
+		// Receive data on listen port
+		rv = recv(targs->listenfd, recvbuf, MAXBUFLEN, MSG_DONTWAIT);
+		if (rv > 0)
+		{
+			recvbuf[rv] = '\0';
+
+			// Obtain mutex lock to write data to log file
+			if (pthread_mutex_lock(&log_lock) != 0)
+			{
+				printf("ERROR: Mutex Lock to Write Data From Receive Buffer to Log File\n");
+				syslog(LOG_ERR, "ERROR: Mutex Lock to Write Data From Receive Buffer to Log File");
+			}
+
+			if (parse_cmd(recvbuf, rv, &seekto) == 0)
+			{
+
+				// Open the log path to read
+				if ((fp = fopen(LOG_PATH, "r")) == NULL)
+				{
+					printf("ERROR: Unable to Open Log Path\n");
+					syslog(LOG_ERR, "ERROR: Unable to Open Log Path");
+				}
+				else
+				{
+					// The IOCTL function requires that the file pointer be converted to an int
+					fd = fileno(fp);
+					if (ioctl(fd, AESDCHAR_IOCSEEKTO, &seekto) == 0)
+					{
+						while((sendbuflen = fread(sendbuf, sizeof(char), MAXBUFLEN, fp)) > 0) 
+						{
+							if (send(targs->listenfd, sendbuf, sendbuflen, 0) == -1)
+							{
+								printf("ERROR: Data Send\n");
+								syslog(LOG_ERR, "ERROR: Data Send");
+							}
+						}
+						if (fclose(fp) == EOF)
+						{
+							printf("ERROR: Unable to Close Log File\n");
+							syslog(LOG_ERR, "ERROR: Unable to Close Log File");
+						}
+					}
+					else
+					{
+						printf("ERROR: IOCTL\n");
+						syslog(LOG_ERR, "ERROR: IOCTL");
+					}
+				}
+			}
+
+			else
+			{
+				// Append to log
+				if ((fp = fopen(LOG_PATH, "a")) == NULL)
+				{
+					printf("ERROR: Unable to Open Log Path\n");
+					syslog(LOG_ERR, "ERROR: Unable to Open Log Path");
+				}
+				else
+				{
+					if (fprintf(fp, "%s", recvbuf) < 0)
+					{
+						printf("ERROR: fprintf\n");
+						syslog(LOG_ERR, "ERROR: fprintf");
+					}
+					if (fclose(fp) == EOF)
+					{
+						printf("ERROR: fclose\n");
+						syslog(LOG_ERR, "ERROR: fclose");
+					}
+				}
+
+				// Read log
+				if ((fp = fopen(LOG_PATH, "r")) == NULL)
+				{
+					printf("ERROR: Unable to Open Log Path\n");
+					syslog(LOG_ERR, "ERROR: Unable to Open Log Path");
+				}
+				else
+				{
+					while ((sendbuflen = fread(sendbuf, sizeof(char), MAXBUFLEN, fp)) > 0)
+					{
+						if (send(targs->listenfd, sendbuf, sendbuflen, 0) == -1)
+						{
+							printf("ERROR: Data Send\n");
+							syslog(LOG_ERR, "ERROR: Data Send");
+						}
+					}
+					if (fclose(fp) == EOF)
+					{
+						printf("ERROR: fclose\n");
+						syslog(LOG_ERR, "ERROR: fclose");
+					}
+				}
+			}
+
+			// Release the mutex lock of the log file
+			if (pthread_mutex_unlock(&log_lock) != 0)
+			{
+				printf("ERROR: Mutex Unlock\n");
+				syslog(LOG_ERR, "ERROR: Mutex Unlock");
+			}
+		}
+
+		// Failed to receive
+		else if (rv == -1)
+		{
+			if (errno != EAGAIN && errno != EWOULDBLOCK)
+			{
+				targs->rv = -1;
+				printf("ERROR: Data Receive\n");
+				syslog(LOG_ERR, "ERROR: Data Receive");
+			}
+		}
+		else
+		{
+			targs->rv = -1;
+		}
+
+		// Free both send and receive buffers.
+		free(sendbuf);
+		free(recvbuf);
+
+		if (targs->rv < 0)
+		{
+			break;
+		}
+	}
+
+	// Close the listen port
+	if (close(targs->listenfd) == -1)
+	{
+		printf("ERROR: Listen Socket Close\n");
+		syslog(LOG_ERR, "ERROR: Listen Socket Close");
+		targs->rv = -1;
+	}
+
+	syslog(LOG_INFO, "SUCCESS: Closed Connection From %s\n", ipstr);
+
+	return &targs->rv;
+}
+
+
+int main(int argc, char *argv[])
+{
+	int sockfd, listenfd, rv, status, res_bind;
+	struct addrinfo hints, *servinfo;
+	struct sigaction sigact;
+	struct sockaddr laddr;
+	socklen_t addr_size;
+	pthread_t thread;
+	pid_t pid;
+	slist_data_t *datap = NULL;
+	slist_data_t *tdatap = NULL;
+
+#if !USE_AESD_CHAR_DEVICE
+	timer_t timer;
+	struct sigevent sev;
+	struct itimerspec its;
 #endif
 
-    while ((conn_socket = accept(socket_fd, (struct sockaddr*)&address, (socklen_t*)&addr_length)) > 0) {
-        char* remote_ip_address = inet_ntoa(address.sin_addr);
-        syslog(LOG_NOTICE, "Accepted connection from %s", remote_ip_address);
-        
-        /* using calloc here cause it actually initializes the allocated memory */
-        struct thread_information* t_info = calloc(1, sizeof(struct thread_information));
-        if (t_info == NULL) {
-            syslog(LOG_ERR, "Failed to allocate memory for the thread information structure, error: %s", strerror(errno));
-            terminate(EXIT_FAILURE);
-        }
-        t_info->ip_address = calloc(1, strlen(remote_ip_address) + 1);
-        if (t_info->ip_address == NULL) {
-            syslog(LOG_ERR, "Failed to allocate memory to store the IP address of the remote party, error: %s", strerror(errno));
-            free(t_info);
-            terminate(EXIT_FAILURE);
-        }
-        strcpy(t_info->ip_address, remote_ip_address);
-        t_info->socketd = conn_socket;
-        t_info->file_name = calloc(1, strlen(output_file_path) + 1);
-        if (t_info->file_name == NULL) {
-            syslog(LOG_ERR, "Failed to allocate memory to store the file name of output file, error: %s", strerror(errno));
-            free(t_info->ip_address);
-            free(t_info);
-            terminate(EXIT_FAILURE);
-        }
-        strcpy(t_info->file_name, output_file_path);
-        t_info->mutex_ptr = &mutex;
-
-        /* spawn thread, check for errors */
-        int ret_val = pthread_create(&t_info->thread_id, NULL, thread_run_function, t_info);
-        if (ret_val) {
-            syslog(LOG_ERR, "Could not spawn thread for incoming connection, error: %s", strerror(ret_val));
-            free(t_info->ip_address);
-            free(t_info->file_name);
-            free(t_info);
-            terminate(EXIT_FAILURE);
-        }
-
-        /* if everything is fine, add the thread to the list */
-        struct list_node* t_node = calloc(1, sizeof(struct list_node));
-        if (t_node == NULL) {
-            syslog(LOG_ERR, "Could not allocate memory to hold the list node for the thread just spawned, error: %s", strerror(errno));
-            /* kill thread just created */
-            /* kill all threads */
-            free(t_info->ip_address);
-            free(t_info->file_name);
-            free(t_info);
-            terminate(EXIT_FAILURE);
-        }
-        t_node->ptr = t_info;
-        SLIST_INSERT_HEAD(&head_node, t_node, nodes);
-
+	// Make a socket:
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0){
+        printf("ERROR: Open Socket\n");
+        syslog(LOG_ERR, "ERROR: Open Socket");
+        return -1;
     }
+    printf("SUCCESS: Socket Opened\n");
 
-    if (close(socket_fd) < 0) {
-        syslog(LOG_ERR, "Shutdown failed on server socket: %d", errno);
-        terminate(EXIT_FAILURE);
+	// Make sure the struct is empty
+	memset(&hints, 0, sizeof(struct addrinfo));
+
+	// Fill in the IP automatically
+	hints.ai_flags = AI_PASSIVE;
+
+	// Set for IPv4
+	hints.ai_family = AF_INET;
+
+	// TCP stream sockets
+	hints.ai_socktype = SOCK_STREAM;
+
+
+	if ((status = getaddrinfo(NULL, PORT, &hints, &servinfo)) != 0) {
+        printf("ERROR: Get Address Info\n");
+		syslog(LOG_ERR, "ERROR: Get Address Info");
+        return -1;
     }
-    
-    terminate(EXIT_SUCCESS);
+    printf("SUCCESS: Get Address\n");
+
+	// Bind to socket
+	res_bind = bind(sockfd, servinfo->ai_addr, servinfo->ai_addrlen);
+    if(res_bind != 0){
+        printf("ERROR: Bind to Socket\n");
+        syslog(LOG_ERR, "ERROR: Bind to Socket: %d", errno);
+        freeaddrinfo(servinfo); // free the linked list
+        return -1;
+    }
+	printf("SUCCESS: Bind to Socket\n"); 
+
+	// Free the linked list.
+	freeaddrinfo(servinfo);
+
+
+	// Refer to LSP p174
+    // Fork to a daemon if -d command line argument present
+    if (argc > 1) { // Note this line is necessary or test will fail
+        if (strcmp(argv[1], "-d") == 0) {
+			pid = fork ();
+        	if (pid == -1){
+            	return -1;
+        	}
+        	else if (pid > 0){
+            	return 0;
+        	}
+		}
+	}
+
+	// Start listen
+	//if (listen(sockfd, 16) == -1)
+	if (listen(sockfd, BACKLOG) == -1)
+	{
+		printf("ERROR: Listen on Socket\n");
+        syslog(LOG_ERR, "ERROR: Listen on Socket");
+		return -1;
+	}
+
+	// Register signal_handler as our signal handler
+	memset(&sigact, 0, sizeof(struct sigaction));
+	sigact.sa_handler = signal_handler;
+	
+	// Configure for SIGINT
+	if (sigaction(SIGINT, &sigact, NULL) == -1)
+	{
+		printf ("ERROR: Cannot Handle SIGINT\n");
+		syslog(LOG_ERR, "ERROR: Cannot Handle SIGINT");
+		return -1;
+	}
+	
+	// Configure for SIGTERM
+	if (sigaction(SIGTERM, &sigact, NULL) == -1)
+	{
+		printf ("ERROR: Cannot Handle SIGTERM\n");
+		syslog(LOG_ERR, "ERROR: Cannot Handle SIGTERM");
+		return -1;
+	}
+
+	// Initialize pthread mutex
+	if (pthread_mutex_init(&log_lock, NULL) != 0)
+	{
+		printf ("ERROR: Initialize Mutex\n");
+		syslog(LOG_ERR, "ERROR: Initialize Mutex");
+		return -1;
+	}
+
+	// Configure timer thread
+#if !USE_AESD_CHAR_DEVICE
+	memset(&sev, 0, sizeof(sev));
+	sev.sigev_notify = SIGEV_THREAD;
+	sev.sigev_notify_function = &time_thread;
+
+	// Enable monotonic clock
+	if (timer_create(CLOCK_MONOTONIC, &sev, &timer) != 0)
+	{
+		printf ("ERROR: Create Monotonic Clock\n");
+		syslog(LOG_ERR, "ERROR: Create Monotonic Clock");
+		return -1;
+	}
+
+	// Configure timer settings
+	its.it_value.tv_sec = 10;
+	its.it_value.tv_nsec = 0;
+	its.it_interval.tv_sec = 10;
+	its.it_interval.tv_nsec = 0;
+	if (timer_settime(timer, 0, &its, NULL) != 0)
+	{
+		printf ("ERROR: Set Timer\n");
+		syslog(LOG_ERR, "ERROR: Set Timer");
+		return -1;
+	}
+#endif
+
+	// Struct for singular linked list and initialize
+	SLIST_HEAD(slisthead, slist_data_s) head;
+	SLIST_INIT(&head);
+
+	while (!caughtsig)
+	{
+		// Now accept an incoming connection:
+        addr_size = sizeof(struct sockaddr);
+		if ((listenfd = accept(sockfd, &laddr, &addr_size)) == -1)
+		{
+			printf ("ERROR: Accept Incoming Connection\n");
+			syslog(LOG_ERR, "ERROR: Accept Incoming Connection");
+			continue;
+		}
+
+		// Remove any previous threads
+		SLIST_FOREACH_SAFE(datap, &head, entries, tdatap)
+		{
+			if (datap->threadargs.complete)
+			{
+				if ((pthread_join(datap->thread, NULL)) != 0)
+				{
+					printf ("ERROR: Thread Join\n");
+					syslog(LOG_ERR, "ERROR: Thread Join\n");
+				}
+				SLIST_REMOVE(&head, datap, slist_data_s, entries);
+				free(datap);
+			}
+		}
+
+		// Begin to create the threads
+		datap = malloc(sizeof(slist_data_t));
+		datap->threadargs.complete = false;
+		datap->threadargs.listenfd = listenfd;
+		datap->threadargs.laddr = laddr;
+		if ((pthread_create(&thread, NULL, serve_thread, &datap->threadargs)) != 0)
+		{
+			
+			printf ("ERROR: Create Thread\n");
+			syslog(LOG_ERR, "ERROR: Create Thread\n");
+			free(datap);
+			continue;
+		}
+		datap->thread = thread;
+		SLIST_INSERT_HEAD(&head, datap, entries);
+	}
+
+	// Cleanup before exiting application
+	syslog(LOG_INFO, "Exiting application gracefully.");
+	printf("SUCCESS: Begin Cleanup\n");
+	rv = 0;
+
+	// Use linked list to join threads
+	while (!SLIST_EMPTY(&head))
+	{
+		datap = SLIST_FIRST(&head);
+		if (pthread_join(datap->thread, NULL) != 0)
+		{
+			printf ("ERROR: Cleanup Thread Join\n");
+			syslog(LOG_ERR, "ERROR: Cleanup Thread Join\n");
+			rv = -1;
+		}
+		SLIST_REMOVE_HEAD(&head, entries);
+		free(datap);
+	}
+
+	// Delete timer
+#if !USE_AESD_CHAR_DEVICE
+	if (timer_delete(timer) != 0)
+	{
+		printf ("ERROR: Cleanup Timer Delete\n");
+		syslog(LOG_ERR, "ERROR: Cleanup Timer Delete\n");
+		rv = -1;
+	}
+#endif
+
+	// Destroy the mutex
+	if (pthread_mutex_destroy(&log_lock) != 0)
+	{
+		printf ("ERROR: Cleanup Mutex Destroy\n");
+		syslog(LOG_ERR, "ERROR: Cleanup Mutex Destroy\n");
+		rv = -1;
+	}
+
+	// Shutdown down read/write to the socket
+	if (shutdown(sockfd, SHUT_RDWR) == -1)
+	{
+		printf ("ERROR: Cleanup Socket Read/Write Shutdown\n");
+		syslog(LOG_ERR, "ERROR: Cleanup Socket Read/Write Shutdown\n");
+		rv = -1;
+	}
+
+	// Close the socket
+	if (close(sockfd) == -1)
+	{
+		printf ("ERROR: Cleanup Socket Close\n");
+		syslog(LOG_ERR, "ERROR: Cleanup Socket Close\n");
+		rv = -1;
+	}
+	
+	// Cleanup the log file
+#if !USE_AESD_CHAR_DEVICE
+	if (access(LOG_PATH, F_OK) == 0)
+	{
+		if (remove(LOG_PATH) == -1)
+		{
+			printf ("ERROR: Cleanup Close Log File\n");
+			syslog(LOG_ERR, "ERROR: Cleanup Log File\n");
+			rv = -1;
+		}
+	}
+#endif
+
+	return rv;
 }
