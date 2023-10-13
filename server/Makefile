@@ -3,13 +3,10 @@ LDFLAGS ?= -lpthread
 CFLAGS ?= -Wall -Werror -O2 -g
 override CFLAGS += -DUSE_AESD_CHAR_DEVICE
 
-all: aesdsocket
-
-.PHONY : all
-
-
-aesdsocket: aesdsocket.c
-	$(CC) $(CFLAGS) aesdsocket.c -o aesdsocket $(LDFLAGS)
+default:
+	${CC} $(CFLAGS) -o aesdsocket aesdsocket.c $(LDFLAGS)
+all:
+	${CC} -pthread -Wall -o aesdsocket aesdsocket.c
 
 .PHONY: clean
 
