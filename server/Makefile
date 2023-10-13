@@ -5,6 +5,9 @@ override CFLAGS += -DUSE_AESD_CHAR_DEVICE
 
 all: aesdsocket
 
+.PHONY : all
+
+
 aesdsocket: aesdsocket.c
 	$(CC) $(CFLAGS) aesdsocket.c -o aesdsocket $(LDFLAGS)
 
