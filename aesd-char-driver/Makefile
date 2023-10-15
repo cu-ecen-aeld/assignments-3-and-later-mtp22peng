@@ -1,3 +1,4 @@
+
 # See example Makefile from scull project
 # Comment/uncomment the following line to disable/enable debugging
 #DEBUG = y
@@ -10,9 +11,6 @@ else
 endif
 
 EXTRA_CFLAGS += $(DEBFLAGS)
-
-
-#LINUXDIR ?= $(SDKTARGETSYSROOT)/usr/src/kernel
 
 ifneq ($(KERNELRELEASE),)
 # call from kernel build system
@@ -30,4 +28,3 @@ endif
 
 clean:
 	rm -rf *.o *~ core .depend .*.cmd *.ko *.mod.c .tmp_versions
-
