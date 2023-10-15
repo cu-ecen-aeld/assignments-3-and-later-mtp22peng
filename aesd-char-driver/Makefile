@@ -12,7 +12,7 @@ endif
 EXTRA_CFLAGS += $(DEBFLAGS)
 
 
-LINUXDIR ?= $(SDKTARGETSYSROOT)/usr/src/kernel
+#LINUXDIR ?= $(SDKTARGETSYSROOT)/usr/src/kernel
 
 ifneq ($(KERNELRELEASE),)
 # call from kernel build system
@@ -24,7 +24,7 @@ KERNELDIR ?= /lib/modules/$(shell uname -r)/build
 PWD       := $(shell pwd)
 
 modules:
-	$(MAKE) -C $(LINUXDIR) M=$(PWD) modules
+	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules
 
 endif
 
